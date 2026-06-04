@@ -1,4 +1,4 @@
-use crate::components::env_reader::EnvReader;
+use crate::components::env_reader;
 use crate::services::db_migrator::DbMigrator;
 use dotenvy::dotenv;
 use env_logger::Env;
@@ -13,8 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
     env_logger::init_from_env(Env::default().default_filter_or("info"));
 
-    let env_reader = EnvReader::new();
-    let app_config = env_reader.read_server_config().await;
+    let app_config = env_reader::read_server_config().await;
 
     if app_config.display_header {
         info!(
@@ -44,11 +43,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match migrator.migrate_db().await {
         Ok(()) => {
             info!("Database migration completed successfully");
+            Ok(())
         }
         Err(err) => {
             error!("Database migration failed: {}", err);
+            Err(err)
         }
     }
-
-    Ok(())
 }
