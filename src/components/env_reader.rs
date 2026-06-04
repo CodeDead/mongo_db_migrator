@@ -47,7 +47,7 @@ impl EnvReader {
                 let res: bool = d.trim().parse().unwrap_or(true);
                 res
             }
-            Err(_) => false,
+            Err(_) => true,
         };
 
         let copy_indices: bool = match env::var("COPY_INDICES") {
