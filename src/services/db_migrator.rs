@@ -3,6 +3,7 @@ use futures::stream::TryStreamExt;
 use log::{error, info, warn};
 use mongodb::bson::{Document, doc};
 use mongodb::error::{ErrorKind, WriteFailure};
+use mongodb::options::InsertManyOptions;
 use mongodb::{Database, IndexModel};
 
 pub struct DbMigrator {
@@ -102,7 +103,7 @@ impl DbMigrator {
 
             match target_db.create_collection(&collection).await {
                 Ok(_) => {
-                    println!("Collection {} created", collection);
+                    info!("Collection {} created", collection);
                 }
                 Err(err) => {
                     error!("Failed to create collection {}: {}", collection, err);
@@ -280,7 +281,18 @@ impl DbMigrator {
         if in_memory {
             // Bulk insert
             let documents: Vec<Document> = cursor.try_collect().await?;
-            match target_collection.insert_many(documents).await {
+            let opts = InsertManyOptions::builder().ordered(false).build();
+
+            if documents.is_empty() {
+                // Nothing to do
+                return Ok(());
+            }
+
+            match target_collection
+                .insert_many(documents)
+                .with_options(opts)
+                .await
+            {
                 Ok(_) => {}
                 Err(err) => {
                     let is_duplicate_key = match err.kind.as_ref() {
@@ -290,7 +302,7 @@ impl DbMigrator {
                         ErrorKind::BulkWrite(bulk_write_error) => bulk_write_error
                             .write_errors
                             .values()
-                            .any(|e| e.code == 11000),
+                            .all(|e| e.code == 11000),
                         _ => false,
                     };
 
@@ -318,7 +330,7 @@ impl DbMigrator {
                             ErrorKind::BulkWrite(bulk_write_error) => bulk_write_error
                                 .write_errors
                                 .values()
-                                .any(|e| e.code == 11000),
+                                .all(|e| e.code == 11000),
                             _ => false,
                         };
 
