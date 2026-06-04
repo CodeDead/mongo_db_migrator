@@ -18,12 +18,14 @@ The tool uses environment variables to configure its behavior:
 |-----------------------------------------|-----------------------------------------------------------------------------------------|----------|---------|
 | `DISPLAY_HEADER`                        | Display a header logo                                                                   | `bool`   | `true`  |
 | `COPY_INDICES`                          | Boolean to indicate whether indices should be re-created in the destination collections | `bool`   | `false` |
-| `READ_TO_MEMORY`                        | Read collection documents to memory for faster document migration                       | `bool`   | `false` |
+| `READ_TO_MEMORY`                        | Read collection documents to memory for faster document migration*                      | `bool`   | `false` |
 | `MONGODB_ORIGIN_CONNECTION_STRING`      | The origin MongoDB connection string                                                    | `string` | N/A     |
 | `MONGODB_ORIGIN_DB`                     | The origin MongoDB database name                                                        | `string` | N/A     |
 | `MONGODB_ORIGIN_COLLECTIONS`            | A comma-separated list of collections to migrate (example: `collection1,collection2`)   | `string` | N/A     |
 | `MONGODB_DESTINATION_CONNECTION_STRING` | The destination MongoDB connection string                                               | `string` | N/A     |
 | `MONGODB_DESTINATION_DB`                | The destination MongoDB database name                                                   | `string` | N/A     |
+
+*Warning: While this option is blazingly fast, it is not recommended for large databases as it will consume a lot of memory and might cause out-of-memory errors. Use with caution.
 
 ## Dependencies
 

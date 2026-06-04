@@ -120,6 +120,8 @@ impl DbMigrator {
             let collection = collection.clone();
 
             let handle = tokio::spawn(async move {
+                let mut errors: Vec<String> = Vec::new();
+
                 if migrate_indices {
                     match Self::migrate_indices(&collection, &origin_db, &destination_db).await {
                         Ok(_) => {
@@ -130,11 +132,14 @@ impl DbMigrator {
                                 "Failed to migrate indices for collection {}: {}",
                                 collection, err
                             );
+                            errors.push(format!(
+                                "Indices migration failed for '{}': {}",
+                                collection, err
+                            ));
                         }
                     }
                 }
 
-                // Migrate documents
                 match Self::migrate_documents(
                     &collection,
                     &origin_db,
@@ -151,20 +156,35 @@ impl DbMigrator {
                             "Failed to migrate documents for collection {}: {}",
                             collection, err
                         );
+                        errors.push(format!(
+                            "Document migration failed for '{}': {}",
+                            collection, err
+                        ));
                     }
                 };
+
+                errors
             });
             handles.push(handle);
         }
 
+        let mut migration_errors: Vec<String> = Vec::new();
         for handle in handles {
             match handle.await {
-                Ok(_) => {}
+                Ok(task_errors) => {
+                    migration_errors.extend(task_errors);
+                }
                 Err(err) => {
-                    error!("Error occurred during collection migration: {}", err);
-                    return Err(Box::new(err));
+                    error!("Task panicked during collection migration: {}", err);
+                    migration_errors.push(format!("Task panicked: {}", err));
                 }
             }
+        }
+
+        if !migration_errors.is_empty() {
+            let summary = migration_errors.join("; ");
+            error!("Migration completed with errors: {}", summary);
+            return Err(summary.into());
         }
 
         Ok(())
@@ -224,7 +244,7 @@ impl DbMigrator {
 
             if existing_names.contains(&index_name) {
                 info!(
-                    "Index '{}' already exists in collection '{}', skipping",
+                    "Index name '{}' already exists in collection '{}', skipping",
                     index_name, collection_name
                 );
                 continue;
@@ -248,6 +268,42 @@ impl DbMigrator {
         }
 
         Ok(())
+    }
+
+    /// Logs migration progress when the percentage crosses a new 1% boundary.
+    ///
+    /// # Arguments
+    ///
+    /// - `collection` - The name of the collection being migrated.
+    /// - `count` - The current number of documents processed.
+    /// - `total` - The total number of documents to be processed.
+    /// - `previous_pct` - A mutable reference to the previous percentage logged.
+    fn log_progress(
+        inserting: bool,
+        collection: &str,
+        count: u64,
+        total: u64,
+        previous_pct: &mut u64,
+    ) {
+        if total == 0 {
+            return;
+        }
+        let current_pct = (count * 100) / total;
+        if current_pct > *previous_pct {
+            if inserting {
+                info!(
+                    "Inserting into collection '{}': {}% ({} / {} documents)",
+                    collection, current_pct, count, total
+                );
+            } else {
+                info!(
+                    "Reading from collection '{}': {}% ({} / {} documents)",
+                    collection, current_pct, count, total
+                );
+            }
+
+            *previous_pct = current_pct;
+        }
     }
 
     /// Migrates documents from the origin database to the target database for a given collection.
@@ -276,26 +332,54 @@ impl DbMigrator {
         let source_collection = origin_db.collection::<Document>(collection);
         let target_collection = target_db.collection::<Document>(collection);
 
+        let total = source_collection.count_documents(doc! {}).await?;
+        info!(
+            "Collection '{}': {} documents to migrate",
+            collection, total
+        );
+
+        if total == 0 {
+            info!("Collection '{}' is empty, nothing to migrate", collection);
+            return Ok(());
+        }
+
         let mut cursor = source_collection.find(doc! {}).await?;
 
         if in_memory {
-            // Bulk insert
-            let documents: Vec<Document> = cursor.try_collect().await?;
-            let opts = InsertManyOptions::builder().ordered(false).build();
+            let mut documents: Vec<Document> = Vec::new();
+            let mut read_count: u64 = 0;
+            let mut previous_pct: u64 = 0;
 
-            if documents.is_empty() {
-                // Nothing to do
-                return Ok(());
+            while let Some(document) = cursor.try_next().await? {
+                documents.push(document);
+                read_count += 1;
+                Self::log_progress(false, collection, read_count, total, &mut previous_pct);
             }
+
+            info!(
+                "Collection '{}': finished reading {} documents, inserting...",
+                collection, read_count
+            );
+
+            let opts = InsertManyOptions::builder().ordered(false).build();
 
             match target_collection
                 .insert_many(documents)
                 .with_options(opts)
                 .await
             {
-                Ok(_) => {}
+                Ok(_) => {
+                    info!(
+                        "Collection '{}': 100% — {} documents inserted",
+                        collection, read_count
+                    );
+                }
                 Err(err) => {
                     let is_duplicate_key = match err.kind.as_ref() {
+                        ErrorKind::InsertMany(insert_many_error) => insert_many_error
+                            .write_errors
+                            .as_ref()
+                            .map_or(false, |errors| errors.iter().all(|e| e.code == 11000)),
                         ErrorKind::Write(WriteFailure::WriteError(write_error)) => {
                             write_error.code == 11000
                         }
@@ -319,18 +403,20 @@ impl DbMigrator {
                 }
             }
         } else {
+            let mut inserted: u64 = 0;
+            let mut previous_pct: u64 = 0;
+
             while let Some(document) = cursor.try_next().await? {
                 match target_collection.insert_one(document).await {
-                    Ok(_) => {}
+                    Ok(_) => {
+                        inserted += 1;
+                        Self::log_progress(true, collection, inserted, total, &mut previous_pct);
+                    }
                     Err(err) => {
                         let is_duplicate_key = match err.kind.as_ref() {
                             ErrorKind::Write(WriteFailure::WriteError(write_error)) => {
                                 write_error.code == 11000
                             }
-                            ErrorKind::BulkWrite(bulk_write_error) => bulk_write_error
-                                .write_errors
-                                .values()
-                                .all(|e| e.code == 11000),
                             _ => false,
                         };
 
@@ -346,6 +432,11 @@ impl DbMigrator {
                     }
                 }
             }
+
+            info!(
+                "Collection '{}': 100% — {} documents inserted",
+                collection, inserted
+            );
         }
 
         Ok(())

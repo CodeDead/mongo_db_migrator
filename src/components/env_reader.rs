@@ -49,21 +49,12 @@ fn ask_yes_no(question: &str) -> bool {
 pub async fn read_server_config() -> AppConfig {
     info!("Reading configuration from environment variables");
 
-    // General
-    let display_header = match env::var("DISPLAY_HEADER") {
-        Ok(d) => {
-            let res: bool = d.trim().parse().unwrap_or(true);
-            res
-        }
-        Err(_) => true,
-    };
-
     let copy_indices: bool = match env::var("COPY_INDICES") {
         Ok(d) => {
             let res: bool = d.trim().parse().unwrap_or(false);
             res
         }
-        Err(_) => ask_yes_no(" Would you like to copy collection indices? (y/n):"),
+        Err(_) => ask_yes_no("Would you like to copy collection indices? (y/n):"),
     };
 
     let read_to_memory = match env::var("READ_TO_MEMORY") {
@@ -72,15 +63,15 @@ pub async fn read_server_config() -> AppConfig {
             res
         }
         Err(_) => {
-            ask_yes_no(" Would you like to copy collections in-memory and use bulk-insert? (y/n):")
+            ask_yes_no("Would you like to copy collections in-memory and use bulk-insert? (y/n):")
         }
     };
 
     let mongodb_origin_connection_string = env::var("MONGODB_ORIGIN_CONNECTION_STRING")
-        .unwrap_or_else(|_| ask_user_input(" Please enter the origin MongoDB connection string:"));
+        .unwrap_or_else(|_| ask_user_input("Please enter the origin MongoDB connection string:"));
 
     let mongodb_origin_db = env::var("MONGODB_ORIGIN_DB")
-        .unwrap_or_else(|_| ask_user_input(" Please enter the origin MongoDB database name:"));
+        .unwrap_or_else(|_| ask_user_input("Please enter the origin MongoDB database name:"));
 
     let mut mongodb_origin_collections: Vec<String> = match env::var("MONGODB_ORIGIN_COLLECTIONS") {
         Ok(d) => {
@@ -95,7 +86,7 @@ pub async fn read_server_config() -> AppConfig {
         }
         Err(_) => {
             let result = ask_user_input(
-                " Please enter the origin MongoDB collection names (comma-separated) or leave empty to read all collections:",
+                "Please enter the origin MongoDB collection names (comma-separated) or leave empty to read all collections:",
             );
             if result.is_empty() {
                 vec![]
@@ -111,11 +102,11 @@ pub async fn read_server_config() -> AppConfig {
 
     let mongodb_destination_connection_string = env::var("MONGODB_DESTINATION_CONNECTION_STRING")
         .unwrap_or_else(|_| {
-            ask_user_input(" Please enter the destination MongoDB connection string:")
+            ask_user_input("Please enter the destination MongoDB connection string:")
         });
 
     let mongodb_destination_db = env::var("MONGODB_DESTINATION_DB")
-        .unwrap_or_else(|_| ask_user_input(" Please enter the destination MongoDB database name:"));
+        .unwrap_or_else(|_| ask_user_input("Please enter the destination MongoDB database name:"));
 
     let origin_client = Client::with_uri_str(mongodb_origin_connection_string)
         .await
@@ -142,7 +133,6 @@ pub async fn read_server_config() -> AppConfig {
     }
 
     AppConfig::new(
-        display_header,
         copy_indices,
         read_to_memory,
         mongodb_origin_db,

@@ -1,6 +1,5 @@
 pub struct AppConfig {
     pub read_to_memory: bool,
-    pub display_header: bool,
     pub copy_indices: bool,
     pub mongodb_origin_db: String,
     pub mongodb_origin_collections: Vec<String>,
@@ -15,7 +14,6 @@ impl AppConfig {
     ///
     /// # Arguments
     ///
-    /// - `display_header` - Boolean to indicate whether to display the application header
     /// - `copy_indices` - Boolean to indicate whether indices should be re-created in the destination collections
     /// - `read_to_memory` - Boolean to indicate whether to read documents to memory for faster migration
     /// - `mongodb_origin_db` - The origin MongoDB database name
@@ -27,9 +25,7 @@ impl AppConfig {
     /// # Returns
     ///
     /// A new `AppConfig` instance with the provided configuration settings.
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        display_header: bool,
         copy_indices: bool,
         read_to_memory: bool,
         mongodb_origin_db: String,
@@ -39,7 +35,6 @@ impl AppConfig {
         destination_client: mongodb::Client,
     ) -> Self {
         Self {
-            display_header,
             copy_indices,
             read_to_memory,
             mongodb_origin_db,
