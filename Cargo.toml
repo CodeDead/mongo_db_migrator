@@ -1,0 +1,25 @@
+[package]
+name = "mongo_db_migrator"
+description = "Database migration tool"
+readme = "README.md"
+license-file = "LICENSE"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.96.0"
+authors = ["CodeDead <admin@codedead.com>"]
+
+[dependencies]
+dotenvy = "0.15.7"
+env_logger = "0.11.10"
+futures = "0.3.32"
+log = "0.4.32"
+mongodb = "3.7.0"
+tokio = { version = "1.52.3", features = ["full"] }
+
+[profile.release]
+lto = true
+strip = "symbols"
+debug = false
+panic = "abort"
+opt-level = "z"
+codegen-units = 1
