@@ -5,14 +5,14 @@ readme = "README.md"
 license-file = "LICENSE"
 version = "1.0.1"
 edition = "2024"
-rust-version = "1.96.0"
+rust-version = "1.96.1"
 authors = ["CodeDead <admin@codedead.com>"]
 
 [dependencies]
 dotenvy = "0.15.7"
-env_logger = "0.11.10"
+env_logger = "0.11.11"
 futures = "0.3.32"
-log = "0.4.32"
+log = "0.4.33"
 mongodb = "3.7.0"
 tokio = { version = "1.52.3", features = ["full"] }
 
